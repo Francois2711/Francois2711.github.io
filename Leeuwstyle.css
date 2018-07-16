@@ -6,7 +6,7 @@ html {
 }
 
 body {
-  font-family: 'Montserrat', sans-serif;
+  font-family: 'Dancing Script', sans-serif;
 }
 
 hr {
@@ -21,14 +21,19 @@ hr {
 
 header.startup {
   background-position: center;
-  background-image: url("Kaap.jpg");
+  background-image: url("Kaap2.jpg");
   background-size: cover;
   height: 100%;
 }
 
 header.startup hr {
+  position: relative;
+  top: 191px;
+    left: 10px;
+    right: -420px;
+    bottom: -191px;
   margin-top: 200px;
-  margin-bottom: 30px; 
+  margin-bottom: 20px; 
 }
 
 header.startup h1 {
@@ -47,6 +52,11 @@ header.startup h1 {
 }
 
 .btn-primary {
+  position: relative;
+  top: 191px;
+    left: 10px;
+    right: -420px;
+    bottom: -191px;
   background-color: #F05F44;
   border-color: #F05F44; }
 
