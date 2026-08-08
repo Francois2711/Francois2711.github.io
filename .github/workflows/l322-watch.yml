@@ -1,0 +1,35 @@
+name: Range Rover L322 SA Watch
+
+on:
+  schedule:
+    - cron: '37 6 * * *'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run L322 watcher
+        env:
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python scripts/l322_watch.py
+
+      - name: Commit updated seen-listings cache
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add data/l322_seen.json
+          git diff --cached --quiet || git commit -m "Update Range Rover L322 seen-listings cache"
+          git push
