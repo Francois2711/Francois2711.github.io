@@ -30,6 +30,7 @@ INCLUDE_RE = re.compile(r"range\s*rover", re.I)
 EXCLUDE_RE = re.compile(
     r"sport|evoque|velar|discovery|defender|freelander|stormer", re.I
 )
+NAV_LINK_RE = re.compile(r"view more|show more|see all|see more|results?$", re.I)
 
 SOURCES = [
     ("AutoTrader", "https://www.autotrader.co.za/cars-for-sale/land-rover/range-rover"),
@@ -39,11 +40,24 @@ SOURCES = [
 ]
 
 
+COOKIE_BUTTON_TEXTS = ["Accept", "Accept All", "I Accept", "I agree", "Allow all", "Got it"]
+
+
 def fetch_rendered_html(browser, url):
     page = browser.new_page(user_agent=USER_AGENT)
     try:
         page.goto(url, timeout=30000, wait_until="domcontentloaded")
-        page.wait_for_timeout(3000)
+        page.wait_for_timeout(2000)
+        for label in COOKIE_BUTTON_TEXTS:
+            try:
+                button = page.get_by_role("button", name=label, exact=False).first
+                if button.is_visible(timeout=500):
+                    button.click(timeout=500)
+                    page.wait_for_timeout(500)
+                    break
+            except Exception:
+                pass
+        page.wait_for_timeout(1000)
         for _ in range(4):
             page.mouse.wheel(0, 1800)
             page.wait_for_timeout(800)
@@ -66,8 +80,12 @@ def find_candidates(browser, source_name, url):
 
     soup = BeautifulSoup(html, "html.parser")
     all_links = soup.find_all("a", href=True)
+    model_mentions = 0
     for a in all_links:
-        context_parts = [a.get_text(" ", strip=True), a.get("title", ""), a.get("aria-label", "")]
+        own_text = a.get_text(" ", strip=True)
+        if NAV_LINK_RE.search(own_text):
+            continue
+        context_parts = [own_text, a.get("title", ""), a.get("aria-label", "")]
         node = a
         for _ in range(3):
             node = node.parent
@@ -77,12 +95,17 @@ def find_candidates(browser, source_name, url):
         text = " ".join(filter(None, context_parts))
         if not text:
             continue
+        if INCLUDE_RE.search(text):
+            model_mentions += 1
         if INCLUDE_RE.search(text) and YEAR_RE.search(text) and not EXCLUDE_RE.search(text):
             full_url = urljoin(url, a["href"])
             snippet = a.get_text(" ", strip=True) or text
             candidates[full_url] = f"[{source_name}] {snippet.strip()[:140]}"
 
-    print(f"[{source_name}] {len(all_links)} link(s) on page, {len(candidates)} candidate(s) found")
+    print(
+        f"[{source_name}] {len(all_links)} link(s), {model_mentions} mention 'range rover', "
+        f"{len(candidates)} candidate(s) found"
+    )
     return candidates
 
 
