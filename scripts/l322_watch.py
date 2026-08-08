@@ -9,24 +9,21 @@ import os
 import re
 import smtplib
 import sys
-import time
 from email.mime.text import MIMEText
 from urllib.parse import urljoin
 
-import requests
 from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
 SEEN_PATH = os.path.join(os.path.dirname(__file__), "..", "data", "l322_seen.json")
 
 SENDER = "francois2711@gmail.com"
 RECIPIENT = "francois2711@gmail.com"
 
-HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
-    )
-}
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/124.0 Safari/537.36"
+)
 
 YEAR_RE = re.compile(r"\b(200[7-9]|201[0-2])\b")
 INCLUDE_RE = re.compile(r"range\s*rover", re.I)
@@ -42,18 +39,28 @@ SOURCES = [
 ]
 
 
-def find_candidates(source_name, url):
-    """Best-effort scrape: scan every link's visible text/title/aria-label
-    for a Range Rover L322-shaped match (year 2007-2012, not another model)."""
+def fetch_rendered_html(browser, url):
+    page = browser.new_page(user_agent=USER_AGENT)
+    try:
+        page.goto(url, timeout=45000, wait_until="networkidle")
+        page.wait_for_timeout(2000)
+        return page.content()
+    finally:
+        page.close()
+
+
+def find_candidates(browser, source_name, url):
+    """Best-effort scrape of the JS-rendered page: scan every link's visible
+    text/title/aria-label for a Range Rover L322-shaped match (year
+    2007-2012, not another model)."""
     candidates = {}
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=30)
-        resp.raise_for_status()
+        html = fetch_rendered_html(browser, url)
     except Exception as exc:
         print(f"[{source_name}] fetch failed: {exc}", file=sys.stderr)
         return candidates
 
-    soup = BeautifulSoup(resp.text, "html.parser")
+    soup = BeautifulSoup(html, "html.parser")
     for a in soup.find_all("a", href=True):
         text = " ".join(
             filter(
@@ -108,9 +115,13 @@ def main():
     seen = load_seen()
 
     all_candidates = {}
-    for name, url in SOURCES:
-        all_candidates.update(find_candidates(name, url))
-        time.sleep(2)
+    with sync_playwright() as p:
+        browser = p.chromium.launch()
+        try:
+            for name, url in SOURCES:
+                all_candidates.update(find_candidates(browser, name, url))
+        finally:
+            browser.close()
 
     new_links = {url: label for url, label in all_candidates.items() if url not in seen}
 
