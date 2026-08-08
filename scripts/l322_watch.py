@@ -43,16 +43,20 @@ def fetch_rendered_html(browser, url):
     page = browser.new_page(user_agent=USER_AGENT)
     try:
         page.goto(url, timeout=30000, wait_until="domcontentloaded")
-        page.wait_for_timeout(4000)
+        page.wait_for_timeout(3000)
+        for _ in range(4):
+            page.mouse.wheel(0, 1800)
+            page.wait_for_timeout(800)
         return page.content()
     finally:
         page.close()
 
 
 def find_candidates(browser, source_name, url):
-    """Best-effort scrape of the JS-rendered page: scan every link's visible
-    text/title/aria-label for a Range Rover L322-shaped match (year
-    2007-2012, not another model)."""
+    """Best-effort scrape of the JS-rendered page: a listing's year/model
+    text usually lives in a sibling/child element of its <a>, not the
+    anchor's own text, so match against each link plus a few ancestor
+    levels (the enclosing listing "card")."""
     candidates = {}
     try:
         html = fetch_rendered_html(browser, url)
@@ -61,20 +65,24 @@ def find_candidates(browser, source_name, url):
         return candidates
 
     soup = BeautifulSoup(html, "html.parser")
-    for a in soup.find_all("a", href=True):
-        text = " ".join(
-            filter(
-                None,
-                [a.get_text(" ", strip=True), a.get("title", ""), a.get("aria-label", "")],
-            )
-        )
+    all_links = soup.find_all("a", href=True)
+    for a in all_links:
+        context_parts = [a.get_text(" ", strip=True), a.get("title", ""), a.get("aria-label", "")]
+        node = a
+        for _ in range(3):
+            node = node.parent
+            if node is None or node.name in ("body", "html", "[document]"):
+                break
+            context_parts.append(node.get_text(" ", strip=True))
+        text = " ".join(filter(None, context_parts))
         if not text:
             continue
         if INCLUDE_RE.search(text) and YEAR_RE.search(text) and not EXCLUDE_RE.search(text):
             full_url = urljoin(url, a["href"])
-            candidates[full_url] = f"[{source_name}] {text.strip()[:140]}"
+            snippet = a.get_text(" ", strip=True) or text
+            candidates[full_url] = f"[{source_name}] {snippet.strip()[:140]}"
 
-    print(f"[{source_name}] {len(candidates)} candidate link(s) found")
+    print(f"[{source_name}] {len(all_links)} link(s) on page, {len(candidates)} candidate(s) found")
     return candidates
 
 
