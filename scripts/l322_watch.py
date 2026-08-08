@@ -42,8 +42,8 @@ SOURCES = [
 def fetch_rendered_html(browser, url):
     page = browser.new_page(user_agent=USER_AGENT)
     try:
-        page.goto(url, timeout=45000, wait_until="networkidle")
-        page.wait_for_timeout(2000)
+        page.goto(url, timeout=30000, wait_until="domcontentloaded")
+        page.wait_for_timeout(4000)
         return page.content()
     finally:
         page.close()
